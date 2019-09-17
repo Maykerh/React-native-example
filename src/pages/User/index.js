@@ -1,6 +1,5 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
-import { View } from 'react-native';
 import api from '../../services/api';
 import {
     Container,
@@ -13,7 +12,8 @@ import {
     Info,
     OwnerAvatar,
     Title,
-    Author
+    Author,
+    Loading
 } from './styles';
 
 export default class User extends Component {
@@ -24,27 +24,69 @@ export default class User extends Component {
     constructor(props) {
         super(props);
 
+        this.loadItems = this.loadItems.bind(this);
+
         this.state = {
-            stars: []
+            stars: [],
+            loading: true,
+            isRefreshing: false,
+            page: 1
         };
     }
 
     async componentDidMount() {
+        const { page } = this.state;
+
+        this.loadItems(page);
+    }
+
+    async loadItems(page) {
         const { navigation } = this.props;
+        const { stars, isRefreshing } = this.state;
         const user = navigation.getParam('user');
 
-        const response = await api.get(`/users/${user.login}/starred`);
+        const response = await api.get(
+            `/users/${user.login}/starred?page=${page}`
+        );
+
+        const newStars = isRefreshing
+            ? response.data
+            : [...stars, ...response.data];
 
         this.setState({
-            stars: response.data
+            stars: newStars,
+            page,
+            loading: false,
+            isRefreshing: false
         });
+    }
+
+    refreshList() {
+        this.setState(
+            {
+                isRefreshing: true
+            },
+            () => {
+                this.loadItems(1);
+            }
+        );
+    }
+
+    openWebView(uri) {
+        const { navigation } = this.props;
+
+        navigation.navigate('WebView', { uri });
     }
 
     render() {
         const { navigation } = this.props;
-        const { stars } = this.state;
+        const { stars, loading, page, isRefreshing } = this.state;
 
         const user = navigation.getParam('user');
+
+        if (loading) {
+            return <Loading />;
+        }
 
         return (
             <Container>
@@ -56,9 +98,21 @@ export default class User extends Component {
 
                 <Stars
                     data={stars}
+                    onRefresh={() => {
+                        this.refreshList();
+                    }}
+                    refreshing={isRefreshing}
+                    onEndReachedThreshold={0.2}
+                    onEndReached={() => {
+                        this.loadItems(page + 1);
+                    }}
                     keyExtractor={star => String(star.id)}
                     renderItem={({ item }) => (
-                        <Starred>
+                        <Starred
+                            onPress={() => {
+                                this.openWebView(item.html_url);
+                            }}
+                        >
                             <OwnerAvatar
                                 source={{ uri: item.owner.avatar_url }}
                             />
@@ -76,6 +130,7 @@ export default class User extends Component {
 
 User.propTypes = {
     navigation: PropTypes.shape({
-        getParam: PropTypes.func
+        getParam: PropTypes.func,
+        navigate: PropTypes.func
     }).isRequired
 };

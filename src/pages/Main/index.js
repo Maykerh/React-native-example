@@ -65,7 +65,7 @@ export default class Main extends Component {
         };
 
         this.setState({
-            users: [...users, data],
+            users: [data, ...users],
             newUser: '',
             loading: false
         });
